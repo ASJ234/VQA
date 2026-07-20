@@ -15,10 +15,16 @@ from model import (PMCVQAModel, get_fusion_head_params, get_lora_params,
                    count_trainable_params)
 
 
-def compute_class_weights(dataset):
+def compute_class_weights_from_csv(csv_path, num_samples=0):
+    import csv
+    label_map = {'A': 0, 'B': 1, 'C': 2, 'D': 3}
     counts = torch.zeros(4)
-    for i in range(len(dataset)):
-        counts[dataset[i]['label']] += 1
+    with open(csv_path) as f:
+        reader = csv.DictReader(f)
+        for i, row in enumerate(reader):
+            if num_samples and i >= num_samples:
+                break
+            counts[label_map[row['Answer'].strip()]] += 1
     total = counts.sum()
     weights = total / (counts + 1e-8)
     weights = weights / weights.sum() * 4
@@ -129,6 +135,10 @@ def main():
         image_size=config.image_size,
         split='train',
     )
+
+    limit = config.max_train_samples
+    if limit and limit < len(full_dataset):
+        full_dataset.samples = full_dataset.samples[:limit]
     print(f"Loaded {len(full_dataset)} training samples")
 
     val_size = int(len(full_dataset) * config.val_split)
@@ -138,7 +148,8 @@ def main():
         generator=torch.Generator().manual_seed(42))
     print(f"Train: {len(train_dataset)}, Val: {len(val_dataset)}")
 
-    class_weights = compute_class_weights(train_dataset.dataset if hasattr(train_dataset, 'dataset') else train_dataset)
+    class_weights = compute_class_weights_from_csv(
+        config.train_csv, num_samples=limit or 0)
     print(f"Class weights: {class_weights.tolist()}")
 
     train_loader = DataLoader(
