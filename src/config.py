@@ -5,7 +5,7 @@ from dataclasses import dataclass
 class Config:
     # Paths
     data_root: str = "pmc-vqa_data"
-    image_dir: str = "pmc-vqa_data/images_2/figures"
+    image_dir: str = "pmc-vqa_data/figures"
     train_csv: str = "pmc-vqa_data/train_2.csv"
     test_csv: str = "pmc-vqa_data/test_2.csv"
     checkpoint_dir: str = "checkpoints"
