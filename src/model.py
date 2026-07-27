@@ -1,7 +1,7 @@
 import math
 import torch
 import torch.nn as nn
-from transformers import AutoModel
+import open_clip
 
 
 class LoRAAdapter(nn.Module):
@@ -35,39 +35,19 @@ def _replace_linear_with_lora(module, target_names, config):
             _replace_linear_with_lora(child, target_names, config)
 
 
-def _get_pooled(x):
-    if isinstance(x, torch.Tensor):
-        return x[:, 0] if x.dim() == 3 else x
-    if hasattr(x, 'pooler_output') and x.pooler_output is not None:
-        return x.pooler_output
-    if hasattr(x, 'last_hidden_state'):
-        return x.last_hidden_state[:, 0]
-    raise TypeError(f"Unexpected encoder output type: {type(x)}")
-
-
 class PMCVQAModel(nn.Module):
     def __init__(self, config):
         super().__init__()
         self.config = config
 
-        self.backbone = AutoModel.from_pretrained(
-            config.model_name,
-            trust_remote_code=True,
-        )
+        self.backbone, _, _ = open_clip.create_model_and_transforms(
+            'hf-hub:microsoft/BiomedCLIP-PubMedBERT_256-vit_base_patch16_224')
 
-        vision_dim = 768
-        text_dim = 768
+        vision_dim = self.backbone.visual.output_dim
+        text_dim = self.backbone.text_projection.shape[0]
 
-        if config.use_lora:
-            _replace_linear_with_lora(
-                self.backbone.vision_encoder, {'q_proj', 'v_proj'}, config)
-            _replace_linear_with_lora(
-                self.backbone.text_encoder, {'query', 'value'}, config)
-        else:
-            for p in self.backbone.vision_encoder.parameters():
-                p.requires_grad = False
-            for p in self.backbone.text_encoder.parameters():
-                p.requires_grad = False
+        for p in self.backbone.parameters():
+            p.requires_grad = False
 
         fusion_dim = vision_dim + text_dim * 2
         self.fusion_head = nn.Sequential(
@@ -90,17 +70,12 @@ class PMCVQAModel(nn.Module):
                 choices_input_ids, choices_attention_mask):
         B = images.size(0)
 
-        v_out = self.backbone.vision_encoder(images)
-        img_feat = _get_pooled(v_out).float()
+        img_feat = self.backbone.encode_image(images).float()
 
-        q_out = self.backbone.text_encoder(
-            question_input_ids, attention_mask=question_attention_mask)
-        q_feat = _get_pooled(q_out).float()
+        q_feat = self.backbone.encode_text(question_input_ids).float()
 
         c_ids = choices_input_ids.view(B * 4, -1)
-        c_mask = choices_attention_mask.view(B * 4, -1)
-        c_out = self.backbone.text_encoder(c_ids, attention_mask=c_mask)
-        c_feat = _get_pooled(c_out).float().view(B, 4, -1)
+        c_feat = self.backbone.encode_text(c_ids).float().view(B, 4, -1)
 
         img_feat = img_feat.unsqueeze(1).expand(-1, 4, -1)
         q_feat = q_feat.unsqueeze(1).expand(-1, 4, -1)
@@ -115,7 +90,7 @@ def get_fusion_head_params(model):
 
 
 def get_lora_params(model):
-    return [p for n, p in model.named_parameters() if 'lora_' in n]
+    return []
 
 
 def count_trainable_params(model):

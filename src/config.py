@@ -14,7 +14,7 @@ class Config:
 
     # Model
     model_name: str = "microsoft/BiomedCLIP-PubMedBERT_256-vit_base_patch16_224"
-    use_lora: bool = True
+    use_lora: bool = False
     lora_r: int = 8
     lora_alpha: int = 16
     lora_dropout: float = 0.1
@@ -46,3 +46,12 @@ class Config:
     # Evaluation
     eval_batch_size: int = 64
     num_explain_samples: int = 10
+
+    # Weights & Biases
+    use_wandb: bool = True
+    wandb_project: str = "pmc-vqa"
+    wandb_run_name: str = ""
+
+    # Hugging Face Hub
+    push_to_hub: bool = True
+    hf_repo_id: str = "ASJ234/pmc-vqa"

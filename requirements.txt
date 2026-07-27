@@ -8,3 +8,5 @@ matplotlib
 numpy
 open_clip_torch>=2.0.0
 tqdm
+wandb
+huggingface_hub

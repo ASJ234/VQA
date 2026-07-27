@@ -6,8 +6,10 @@ import torch.nn as nn
 from torch.utils.data import DataLoader, random_split
 from torch.optim import AdamW
 from torch.cuda.amp import autocast, GradScaler
-from transformers import AutoTokenizer
+import open_clip
 from tqdm import tqdm
+import wandb
+from huggingface_hub import HfApi
 
 from config import Config
 from dataset import PMCVQADataset, collate_fn
@@ -124,8 +126,15 @@ def main():
     os.makedirs(config.checkpoint_dir, exist_ok=True)
     os.makedirs(config.output_dir, exist_ok=True)
 
-    tokenizer = AutoTokenizer.from_pretrained(
-        config.model_name, trust_remote_code=True)
+    if config.use_wandb:
+        wandb.init(
+            project=config.wandb_project,
+            name=config.wandb_run_name or None,
+            config=vars(config),
+        )
+
+    tokenizer = open_clip.get_tokenizer(
+        'hf-hub:microsoft/BiomedCLIP-PubMedBERT_256-vit_base_patch16_224')
 
     full_dataset = PMCVQADataset(
         csv_path=config.train_csv,
@@ -210,6 +219,20 @@ def main():
         print(f"  Val   Loss: {val_loss:.4f}  Acc: {val_acc:.4f}")
         print(f"  Per-class: {per_class_str}")
 
+        if config.use_wandb:
+            wandb.log({
+                'epoch': epoch,
+                'train/loss': train_loss,
+                'train/acc': train_acc,
+                'val/loss': val_loss,
+                'val/acc': val_acc,
+                'val/per_class_A': per_class_acc[0],
+                'val/per_class_B': per_class_acc[1],
+                'val/per_class_C': per_class_acc[2],
+                'val/per_class_D': per_class_acc[3],
+                'lr': scheduler.get_last_lr()[0],
+            })
+
         is_best = val_acc > best_val_acc
         if is_best:
             best_val_acc = val_acc
@@ -228,6 +251,20 @@ def main():
             print(f"  saved best model (val_acc={val_acc:.4f})")
 
     print(f"\nTraining complete. Best val acc: {best_val_acc:.4f}")
+
+    if config.push_to_hub and config.hf_repo_id:
+        print(f"Pushing best model to Hugging Face Hub: {config.hf_repo_id}")
+        api = HfApi()
+        api.upload_file(
+            path_or_fileobj=f"{config.checkpoint_dir}/best.pt",
+            path_in_repo="model.pt",
+            repo_id=config.hf_repo_id,
+            repo_type="model",
+        )
+        print(f"  Model pushed to https://huggingface.co/{config.hf_repo_id}")
+
+    if config.use_wandb:
+        wandb.finish()
 
     with open(f"{config.output_dir}/train_results.json", 'w') as f:
         json.dump({
