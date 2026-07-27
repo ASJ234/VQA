@@ -6,7 +6,7 @@ import torch.nn as nn
 from torch.utils.data import DataLoader, random_split
 from torch.optim import AdamW
 from torch.cuda.amp import autocast, GradScaler
-import open_clip
+from transformers import AutoTokenizer
 from tqdm import tqdm
 import wandb
 from huggingface_hub import HfApi
@@ -133,8 +133,8 @@ def main():
             config=vars(config),
         )
 
-    tokenizer = open_clip.get_tokenizer(
-        'hf-hub:microsoft/BiomedCLIP-PubMedBERT_256-vit_base_patch16_224')
+    tokenizer = AutoTokenizer.from_pretrained(
+        config.model_name, trust_remote_code=True)
 
     full_dataset = PMCVQADataset(
         csv_path=config.train_csv,

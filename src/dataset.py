@@ -50,7 +50,9 @@ class PMCVQADataset(Dataset):
 
         question = sample['Question'].strip()
         q_enc = self.tokenizer(
-            [question], context_length=self.max_length)
+            question, max_length=self.max_length,
+            padding='max_length', truncation=True, return_tensors='pt',
+        )
 
         choices = [
             self._clean_choice(sample['Choice A']),
@@ -59,7 +61,9 @@ class PMCVQADataset(Dataset):
             self._clean_choice(sample['Choice D']),
         ]
         c_enc = self.tokenizer(
-            choices, context_length=self.max_length)
+            choices, max_length=self.max_length,
+            padding='max_length', truncation=True, return_tensors='pt',
+        )
 
         label = self.label_map[sample['Answer'].strip()]
 
