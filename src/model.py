@@ -43,8 +43,8 @@ class PMCVQAModel(nn.Module):
         self.backbone, _, _ = open_clip.create_model_and_transforms(
             'hf-hub:microsoft/BiomedCLIP-PubMedBERT_256-vit_base_patch16_224')
 
-        vision_dim = self.backbone.visual.output_dim
-        text_dim = self.backbone.text_projection.shape[0]
+        vision_dim = 512
+        text_dim = 512
 
         for p in self.backbone.parameters():
             p.requires_grad = False
