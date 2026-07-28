@@ -35,7 +35,7 @@ class Config:
     # Data
     image_size: int = 224
     max_text_length: int = 128
-    num_workers: int = 4
+    num_workers: int = 0
     val_split: float = 0.05
     pin_memory: bool = True
     max_train_samples: int = 0
