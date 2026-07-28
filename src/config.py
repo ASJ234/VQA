@@ -24,7 +24,7 @@ class Config:
     fusion_dropout: float = 0.3
 
     # Training
-    batch_size: int = 32
+    batch_size: int = 16
     num_epochs: int = 15
     lr: float = 5e-5
     head_lr: float = 1e-3
@@ -44,7 +44,7 @@ class Config:
     use_amp: bool = True
 
     # Evaluation
-    eval_batch_size: int = 64
+    eval_batch_size: int = 32
     num_explain_samples: int = 10
 
     # Weights & Biases
