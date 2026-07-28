@@ -1,11 +1,12 @@
 import os
 import json
+import math
 
 import torch
 import torch.nn as nn
-from torch.utils.data import DataLoader, random_split
+from torch.utils.data import DataLoader
 from torch.optim import AdamW
-from torch.cuda.amp import autocast, GradScaler
+from torch.amp import autocast, GradScaler
 from transformers import AutoTokenizer
 from tqdm import tqdm
 import wandb
@@ -51,7 +52,7 @@ def train_epoch(model, loader, criterion, optimizer, scaler, scheduler, device, 
         optimizer.zero_grad()
 
         if config.use_amp and device.type == 'cuda':
-            with autocast():
+            with autocast('cuda'):
                 scores = model(images, q_ids, q_mask, c_ids, c_mask)
                 loss = criterion(scores, labels)
             scaler.scale(loss).backward()
@@ -143,6 +144,7 @@ def main():
         max_length=config.max_text_length,
         image_size=config.image_size,
         split='train',
+        train=True,
     )
 
     limit = config.max_train_samples
@@ -152,9 +154,27 @@ def main():
 
     val_size = int(len(full_dataset) * config.val_split)
     train_size = len(full_dataset) - val_size
-    train_dataset, val_dataset = random_split(
-        full_dataset, [train_size, val_size],
-        generator=torch.Generator().manual_seed(42))
+
+    generator = torch.Generator().manual_seed(42)
+    indices = torch.randperm(len(full_dataset), generator=generator)
+    train_indices = indices[:train_size]
+    val_indices = indices[train_size:]
+
+    train_dataset = torch.utils.data.Subset(full_dataset, train_indices)
+
+    val_dataset_base = PMCVQADataset(
+        csv_path=config.train_csv,
+        image_dir=config.image_dir,
+        tokenizer=tokenizer,
+        max_length=config.max_text_length,
+        image_size=config.image_size,
+        split='train',
+        train=False,
+    )
+    if limit and limit < len(val_dataset_base):
+        val_dataset_base.samples = val_dataset_base.samples[:limit]
+    val_dataset = torch.utils.data.Subset(val_dataset_base, val_indices)
+
     print(f"Train: {len(train_dataset)}, Val: {len(val_dataset)}")
 
     class_weights = compute_class_weights_from_csv(
@@ -191,14 +211,15 @@ def main():
     total_steps = len(train_loader) * config.num_epochs
     warmup_steps = int(total_steps * config.warmup_ratio)
 
-    def warmup_lambda(step):
+    def warmup_cosine_lambda(step):
         if step < warmup_steps:
             return step / max(warmup_steps, 1)
-        return 1.0
+        progress = (step - warmup_steps) / max(total_steps - warmup_steps, 1)
+        return 0.5 * (1.0 + math.cos(math.pi * progress))
 
-    scheduler = torch.optim.lr_scheduler.LambdaLR(optimizer, warmup_lambda)
+    scheduler = torch.optim.lr_scheduler.LambdaLR(optimizer, warmup_cosine_lambda)
     criterion = nn.CrossEntropyLoss(weight=class_weights.to(device))
-    scaler = GradScaler(enabled=(config.use_amp and device.type == 'cuda'))
+    scaler = GradScaler('cuda', enabled=(config.use_amp and device.type == 'cuda'))
 
     best_val_acc = 0.0
     for epoch in range(1, config.num_epochs + 1):

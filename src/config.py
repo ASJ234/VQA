@@ -14,7 +14,7 @@ class Config:
 
     # Model
     model_name: str = "microsoft/BiomedCLIP-PubMedBERT_256-vit_base_patch16_224"
-    use_lora: bool = False
+    use_lora: bool = True
     lora_r: int = 8
     lora_alpha: int = 16
     lora_dropout: float = 0.1
@@ -35,7 +35,7 @@ class Config:
     # Data
     image_size: int = 224
     max_text_length: int = 128
-    num_workers: int = 0
+    num_workers: int = 4
     val_split: float = 0.05
     pin_memory: bool = True
     max_train_samples: int = 0

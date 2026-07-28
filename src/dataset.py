@@ -14,16 +14,26 @@ class PMCVQADataset(Dataset):
     label_map = {'A': 0, 'B': 1, 'C': 2, 'D': 3}
 
     def __init__(self, csv_path, image_dir, tokenizer, max_length=128,
-                 image_size=224, split=None):
+                 image_size=224, split=None, train=True):
         self.image_dir = image_dir
         self.tokenizer = tokenizer
         self.max_length = max_length
 
-        self.transform = transforms.Compose([
-            transforms.Resize((image_size, image_size)),
-            transforms.ToTensor(),
-            transforms.Normalize(mean=IMAGENET_MEAN, std=IMAGENET_STD),
-        ])
+        if train:
+            self.transform = transforms.Compose([
+                transforms.Resize((image_size, image_size)),
+                transforms.RandomHorizontalFlip(),
+                transforms.RandomAffine(degrees=10, translate=(0.05, 0.05)),
+                transforms.ColorJitter(brightness=0.2, contrast=0.2),
+                transforms.ToTensor(),
+                transforms.Normalize(mean=IMAGENET_MEAN, std=IMAGENET_STD),
+            ])
+        else:
+            self.transform = transforms.Compose([
+                transforms.Resize((image_size, image_size)),
+                transforms.ToTensor(),
+                transforms.Normalize(mean=IMAGENET_MEAN, std=IMAGENET_STD),
+            ])
 
         self.samples = []
         with open(csv_path, 'r') as f:

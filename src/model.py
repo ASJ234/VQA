@@ -49,6 +49,10 @@ class PMCVQAModel(nn.Module):
         for p in self.backbone.parameters():
             p.requires_grad = False
 
+        if config.use_lora:
+            lora_targets = ['out_proj', 'fc1', 'fc2', 'query', 'key', 'value', 'dense']
+            _replace_linear_with_lora(self.backbone, lora_targets, config)
+
         fusion_dim = vision_dim + text_dim * 2
         self.fusion_head = nn.Sequential(
             nn.Linear(fusion_dim, config.fusion_hidden),
@@ -90,7 +94,7 @@ def get_fusion_head_params(model):
 
 
 def get_lora_params(model):
-    return []
+    return [p for n, p in model.named_parameters() if 'lora_' in n]
 
 
 def count_trainable_params(model):
