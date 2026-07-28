@@ -38,7 +38,7 @@ class Config:
     num_workers: int = 0
     val_split: float = 0.05
     pin_memory: bool = True
-    max_train_samples: int = 0
+    max_train_samples: int = 10000
 
     # Precision
     use_amp: bool = True

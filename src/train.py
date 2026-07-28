@@ -11,6 +11,7 @@ from transformers import AutoTokenizer
 from tqdm import tqdm
 import wandb
 from huggingface_hub import HfApi
+from sklearn.model_selection import train_test_split
 
 from config import Config
 from dataset import PMCVQADataset, collate_fn
@@ -149,7 +150,13 @@ def main():
 
     limit = config.max_train_samples
     if limit and limit < len(full_dataset):
-        full_dataset.samples = full_dataset.samples[:limit]
+        labels = [s['Answer'].strip() for s in full_dataset.samples]
+        indices = list(range(len(full_dataset)))
+        selected, _, _, _ = train_test_split(
+            indices, labels, train_size=limit,
+            stratify=labels, random_state=42,
+        )
+        full_dataset.samples = [full_dataset.samples[i] for i in selected]
     print(f"Loaded {len(full_dataset)} training samples")
 
     val_size = int(len(full_dataset) * config.val_split)
