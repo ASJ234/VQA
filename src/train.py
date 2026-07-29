@@ -12,6 +12,7 @@ from tqdm import tqdm
 import wandb
 from huggingface_hub import HfApi
 from sklearn.model_selection import train_test_split
+from sklearn.metrics import roc_auc_score
 
 from config import Config
 from dataset import PMCVQADataset, collate_fn
@@ -86,10 +87,10 @@ def train_epoch(model, loader, criterion, optimizer, scaler, scheduler, device, 
 def validate(model, loader, criterion, device):
     model.eval()
     total_loss = 0
-    correct = 0
     total = 0
-    per_class_correct = torch.zeros(4, device=device)
-    per_class_total = torch.zeros(4, device=device)
+    all_preds = []
+    all_labels = []
+    all_probs = []
 
     for batch in tqdm(loader, desc='Val', leave=False):
         images = batch['image'].to(device)
@@ -103,18 +104,50 @@ def validate(model, loader, criterion, device):
         loss = criterion(scores, labels)
 
         total_loss += loss.item() * images.size(0)
-        preds = scores.argmax(dim=-1)
-        correct += (preds == labels).sum().item()
         total += images.size(0)
 
-        for c in range(4):
-            mask = labels == c
-            per_class_correct[c] += (preds[mask] == labels[mask]).sum().item()
-            per_class_total[c] += mask.sum().item()
+        probs = torch.softmax(scores, dim=-1)
+        all_preds.append(scores.argmax(dim=-1).cpu())
+        all_labels.append(labels.cpu())
+        all_probs.append(probs.cpu())
 
-    acc = correct / total
-    per_class_acc = per_class_correct / per_class_total.clamp(min=1)
-    return total_loss / total, acc, per_class_acc.tolist()
+    all_preds = torch.cat(all_preds)
+    all_labels = torch.cat(all_labels)
+    all_probs = torch.cat(all_probs)
+
+    acc = (all_preds == all_labels).float().mean().item()
+
+    per_class_acc = torch.zeros(4)
+    for c in range(4):
+        mask = all_labels == c
+        per_class_acc[c] = (all_preds[mask] == all_labels[mask]).float().mean().item() if mask.any() else 0.0
+
+    precision, recall, f1 = torch.zeros(4), torch.zeros(4), torch.zeros(4)
+    for c in range(4):
+        tp = ((all_preds == c) & (all_labels == c)).sum().item()
+        fp = ((all_preds == c) & (all_labels != c)).sum().item()
+        fn = ((all_preds != c) & (all_labels == c)).sum().item()
+        precision[c] = tp / (tp + fp + 1e-8)
+        recall[c] = tp / (tp + fn + 1e-8)
+        f1[c] = 2 * precision[c] * recall[c] / (precision[c] + recall[c] + 1e-8)
+    macro_f1 = f1.mean().item()
+
+    top2_preds = all_probs.topk(2, dim=-1).indices
+    top2_acc = (top2_preds == all_labels.unsqueeze(1)).any(dim=-1).float().mean().item()
+
+    try:
+        auc_roc = roc_auc_score(all_labels.numpy(), all_probs.numpy(), multi_class='ovr')
+    except Exception:
+        auc_roc = 0.0
+
+    confusion = torch.zeros(4, 4, dtype=torch.int64)
+    for t, p in zip(all_labels, all_preds):
+        confusion[t, p] += 1
+
+    return (total_loss / total, acc, per_class_acc.tolist(),
+            precision.tolist(), recall.tolist(), f1.tolist(),
+            macro_f1, top2_acc, auc_roc,
+            all_labels.numpy(), all_preds.numpy(), confusion.numpy())
 
 
 def main():
@@ -233,6 +266,7 @@ def main():
     scaler = GradScaler('cuda', enabled=(config.use_amp and device.type == 'cuda'))
 
     best_val_acc = 0.0
+    best_macro_f1 = 0.0
     epochs_no_improve = 0
     for epoch in range(1, config.num_epochs + 1):
         print(f"\nEpoch {epoch}/{config.num_epochs}")
@@ -241,16 +275,22 @@ def main():
             model, train_loader, criterion, optimizer, scaler, scheduler,
             device, config)
 
-        val_loss, val_acc, per_class_acc = validate(
-            model, val_loader, criterion, device)
+        (val_loss, val_acc, per_class_acc,
+         per_class_precision, per_class_recall, per_class_f1,
+         macro_f1, top2_acc, auc_roc, val_labels_np, val_preds_np,
+         confusion_np) = validate(model, val_loader, criterion, device)
 
         labels = ['A', 'B', 'C', 'D']
         per_class_str = ', '.join(
             f"{l}: {a:.4f}" for l, a in zip(labels, per_class_acc))
+        f1_str = ', '.join(
+            f"{l}: {f:.4f}" for l, f in zip(labels, per_class_f1))
 
         print(f"  Train Loss: {train_loss:.4f}  Acc: {train_acc:.4f}")
         print(f"  Val   Loss: {val_loss:.4f}  Acc: {val_acc:.4f}")
-        print(f"  Per-class: {per_class_str}")
+        print(f"  Per-class Acc: {per_class_str}")
+        print(f"  Per-class F1 : {f1_str}  |  Macro F1: {macro_f1:.4f}  "
+              f"Top-2: {top2_acc:.4f}  AUC-ROC: {auc_roc:.4f}")
 
         if config.use_wandb:
             wandb.log({
@@ -263,6 +303,24 @@ def main():
                 'val/per_class_B': per_class_acc[1],
                 'val/per_class_C': per_class_acc[2],
                 'val/per_class_D': per_class_acc[3],
+                'val/precision_A': per_class_precision[0],
+                'val/precision_B': per_class_precision[1],
+                'val/precision_C': per_class_precision[2],
+                'val/precision_D': per_class_precision[3],
+                'val/recall_A': per_class_recall[0],
+                'val/recall_B': per_class_recall[1],
+                'val/recall_C': per_class_recall[2],
+                'val/recall_D': per_class_recall[3],
+                'val/f1_A': per_class_f1[0],
+                'val/f1_B': per_class_f1[1],
+                'val/f1_C': per_class_f1[2],
+                'val/f1_D': per_class_f1[3],
+                'val/macro_f1': macro_f1,
+                'val/top2_acc': top2_acc,
+                'val/auc_roc': auc_roc,
+                'val/confusion_matrix': wandb.plot.confusion_matrix(
+                    y_true=val_labels_np, preds=val_preds_np,
+                    class_names=labels),
                 'lr': scheduler.get_last_lr()[0],
             })
 
@@ -278,6 +336,7 @@ def main():
 
         if val_acc > best_val_acc:
             best_val_acc = val_acc
+            best_macro_f1 = macro_f1
             epochs_no_improve = 0
             torch.save(ckpt, f"{config.checkpoint_dir}/best.pt")
             print(f"  saved best model (val_acc={val_acc:.4f})")
@@ -292,6 +351,7 @@ def main():
 
     if config.use_wandb:
         wandb.run.summary['best_val_acc'] = best_val_acc
+        wandb.run.summary['best_macro_f1'] = best_macro_f1
         ckpt = torch.load(f"{config.checkpoint_dir}/best.pt", map_location=device)
         model.load_state_dict(ckpt['model_state_dict'])
         print(f"\nGenerating explanations for {config.num_explain_samples} samples...")
