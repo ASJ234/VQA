@@ -291,6 +291,7 @@ def main():
     print(f"\nTraining complete. Best val acc: {best_val_acc:.4f}")
 
     if config.use_wandb:
+        wandb.run.summary['best_val_acc'] = best_val_acc
         ckpt = torch.load(f"{config.checkpoint_dir}/best.pt", map_location=device)
         model.load_state_dict(ckpt['model_state_dict'])
         print(f"\nGenerating explanations for {config.num_explain_samples} samples...")
