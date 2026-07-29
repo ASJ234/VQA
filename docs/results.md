@@ -1,5 +1,46 @@
 # Training Results — PMC-VQA
 
+## Metrics and why they were chosen
+
+### Accuracy
+Overall fraction of correct predictions. Simple and intuitive, but misleading when classes are imbalanced — a model guessing "C" every time would get ~38%.
+
+### Per-class accuracy
+Accuracy broken down per class (A/B/C/D). Reveals which classes the model handles well or poorly — critical for spotting imbalance effects.
+
+### Precision (per-class)
+Of all predictions for class X, how many were correct?
+```
+precision = tp / (tp + fp)
+```
+High precision = few false alarms. Important when a wrong answer is costly (e.g., confident but wrong diagnosis).
+
+### Recall (per-class)
+Of all true class X samples, how many did the model catch?
+```
+recall = tp / (tp + fn)
+```
+High recall = few misses. Important when missing the correct answer is costly.
+
+### F1 (per-class)
+Harmonic mean of precision and recall:
+```
+F1 = 2 · P · R / (P + R)
+```
+A single number balancing both — better than accuracy when classes are imbalanced.
+
+### Macro F1
+Unweighted average of per-class F1 scores. Treats all classes equally regardless of size — the **single best metric** for imbalanced datasets. If the model ignores minority classes (A, D), macro F1 drops sharply.
+
+### Top-2 accuracy
+Is the correct answer among the model's top 2 choices? At 67% vs 42% accuracy, it shows the model is usually "warm" — it narrows it down to two options even when it can't pick the right one. Useful for applications with human-in-the-loop verification.
+
+### AUC-ROC (One-vs-Rest)
+Measures how well the model separates each class from all others across all confidence thresholds. 0.5 = random, 1.0 = perfect. At 0.67, the model clearly ranks correct answers above incorrect ones on average, even when it doesn't always pick the right one.
+
+### Confusion matrix
+4×4 grid showing true vs predicted labels. Reveals specific confusion patterns — e.g., is the model consistently mixing up A↔D (both minority classes) or B↔C (both majority classes)?
+
 ## What is LoRA?
 
 Low-Rank Adaptation (LoRA) is a parameter-efficient fine-tuning technique. Instead of updating a full weight matrix W (e.g. 768×768), it injects two tiny matrices A and B alongside it:
