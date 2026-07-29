@@ -379,11 +379,34 @@ def main():
                 print(f"  Logged {len(images)} explanation images to W&B")
 
     if config.push_to_hub and config.hf_repo_id:
-        print(f"Pushing best model to Hugging Face Hub: {config.hf_repo_id}")
+        print(f"Pushing to Hugging Face Hub: {config.hf_repo_id}")
         api = HfApi()
+        ckpt = torch.load(f"{config.checkpoint_dir}/best.pt", map_location='cpu')
+        torch.save({
+            'model_state_dict': ckpt['model_state_dict'],
+            'val_acc': ckpt['val_acc'],
+            'config': ckpt['config'],
+        }, '/tmp/best_model.pt')
         api.upload_file(
-            path_or_fileobj=f"{config.checkpoint_dir}/best.pt",
-            path_in_repo="model.pt",
+            path_or_fileobj='/tmp/best_model.pt',
+            path_in_repo="pytorch_model.bin",
+            repo_id=config.hf_repo_id,
+            repo_type="model",
+        )
+        with open('/tmp/config.json', 'w') as f:
+            json.dump({k: (str(v) if not isinstance(v, (int, float, bool, str))
+                           else v) for k, v in config.__dict__.items()}, f)
+        api.upload_file(
+            path_or_fileobj='/tmp/config.json',
+            path_in_repo="config.json",
+            repo_id=config.hf_repo_id,
+            repo_type="model",
+        )
+        with open('/tmp/train_results.json', 'w') as f:
+            json.dump(best_metrics, f)
+        api.upload_file(
+            path_or_fileobj='/tmp/train_results.json',
+            path_in_repo="train_results.json",
             repo_id=config.hf_repo_id,
             repo_type="model",
         )
