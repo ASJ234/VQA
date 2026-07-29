@@ -1,7 +1,6 @@
 import os
 import csv
 import zipfile
-import urllib.request
 from huggingface_hub import hf_hub_download
 
 DATA_DIR = "pmc-vqa_data"
