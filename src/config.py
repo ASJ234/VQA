@@ -21,16 +21,18 @@ class Config:
 
     # Fusion head
     fusion_hidden: int = 512
-    fusion_dropout: float = 0.3
+    fusion_dropout: float = 0.5
 
     # Training
     batch_size: int = 16
     num_epochs: int = 15
     lr: float = 5e-5
-    head_lr: float = 1e-3
-    weight_decay: float = 0.01
+    head_lr: float = 5e-4
+    weight_decay: float = 0.1
     warmup_ratio: float = 0.1
     max_grad_norm: float = 1.0
+    label_smoothing: float = 0.1
+    early_stopping_patience: int = 4
 
     # Data
     image_size: int = 224

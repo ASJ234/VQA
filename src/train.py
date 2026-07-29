@@ -225,10 +225,14 @@ def main():
         return 0.5 * (1.0 + math.cos(math.pi * progress))
 
     scheduler = torch.optim.lr_scheduler.LambdaLR(optimizer, warmup_cosine_lambda)
-    criterion = nn.CrossEntropyLoss(weight=class_weights.to(device))
+    criterion = nn.CrossEntropyLoss(
+        weight=class_weights.to(device),
+        label_smoothing=config.label_smoothing,
+    )
     scaler = GradScaler('cuda', enabled=(config.use_amp and device.type == 'cuda'))
 
     best_val_acc = 0.0
+    epochs_no_improve = 0
     for epoch in range(1, config.num_epochs + 1):
         print(f"\nEpoch {epoch}/{config.num_epochs}")
 
@@ -261,10 +265,6 @@ def main():
                 'lr': scheduler.get_last_lr()[0],
             })
 
-        is_best = val_acc > best_val_acc
-        if is_best:
-            best_val_acc = val_acc
-
         ckpt = {
             'epoch': epoch,
             'model_state_dict': model.state_dict(),
@@ -274,9 +274,18 @@ def main():
             'config': config,
         }
         torch.save(ckpt, f"{config.checkpoint_dir}/last.pt")
-        if is_best:
+
+        if val_acc > best_val_acc:
+            best_val_acc = val_acc
+            epochs_no_improve = 0
             torch.save(ckpt, f"{config.checkpoint_dir}/best.pt")
             print(f"  saved best model (val_acc={val_acc:.4f})")
+        else:
+            epochs_no_improve += 1
+            if epochs_no_improve >= config.early_stopping_patience:
+                print(f"  early stopping after {epoch} epochs (no improvement for "
+                      f"{config.early_stopping_patience} epochs)")
+                break
 
     print(f"\nTraining complete. Best val acc: {best_val_acc:.4f}")
 
