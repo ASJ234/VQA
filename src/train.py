@@ -362,7 +362,7 @@ def main():
     if config.use_wandb:
         for k, v in best_metrics.items():
             wandb.run.summary[k] = v
-        ckpt = torch.load(f"{config.checkpoint_dir}/best.pt", map_location=device)
+        ckpt = torch.load(f"{config.checkpoint_dir}/best.pt", map_location=device, weights_only=False)
         model.load_state_dict(ckpt['model_state_dict'])
         print(f"\nGenerating explanations for {config.num_explain_samples} samples...")
         explain_samples(model, val_dataset_base, tokenizer, device, config,
@@ -381,7 +381,7 @@ def main():
     if config.push_to_hub and config.hf_repo_id:
         print(f"Pushing to Hugging Face Hub: {config.hf_repo_id}")
         api = HfApi()
-        ckpt = torch.load(f"{config.checkpoint_dir}/best.pt", map_location='cpu')
+        ckpt = torch.load(f"{config.checkpoint_dir}/best.pt", map_location='cpu', weights_only=False)
         model.load_state_dict(ckpt['model_state_dict'])
         trainable_state_dict = {k: v.cpu() for k, v in model.state_dict().items()
                                 if any(p.requires_grad for n, p in model.named_parameters()
