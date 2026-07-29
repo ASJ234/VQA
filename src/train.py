@@ -382,14 +382,14 @@ def main():
         print(f"Pushing to Hugging Face Hub: {config.hf_repo_id}")
         api = HfApi()
         ckpt = torch.load(f"{config.checkpoint_dir}/best.pt", map_location='cpu')
-        torch.save({
-            'model_state_dict': ckpt['model_state_dict'],
-            'val_acc': ckpt['val_acc'],
-            'config': ckpt['config'],
-        }, '/tmp/best_model.pt')
+        model.load_state_dict(ckpt['model_state_dict'])
+        trainable_state_dict = {k: v.cpu() for k, v in model.state_dict().items()
+                                if any(p.requires_grad for n, p in model.named_parameters()
+                                       if n == k)}
+        torch.save(trainable_state_dict, '/tmp/adapter_model.pt')
         api.upload_file(
-            path_or_fileobj='/tmp/best_model.pt',
-            path_in_repo="pytorch_model.bin",
+            path_or_fileobj='/tmp/adapter_model.pt',
+            path_in_repo="adapter_model.pt",
             repo_id=config.hf_repo_id,
             repo_type="model",
         )
@@ -410,7 +410,8 @@ def main():
             repo_id=config.hf_repo_id,
             repo_type="model",
         )
-        print(f"  Model pushed to https://huggingface.co/{config.hf_repo_id}")
+        print(f"  Pushed adapter_model.pt ({os.path.getsize('/tmp/adapter_model.pt')/1e6:.1f}MB) "
+              f"to https://huggingface.co/{config.hf_repo_id}")
 
     if config.use_wandb:
         wandb.finish()
