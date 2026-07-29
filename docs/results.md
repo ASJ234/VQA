@@ -1,5 +1,19 @@
 # Training Results — PMC-VQA
 
+## What is LoRA?
+
+Low-Rank Adaptation (LoRA) is a parameter-efficient fine-tuning technique. Instead of updating a full weight matrix W (e.g. 768×768), it injects two tiny matrices A and B alongside it:
+
+```
+W_updated = W + B·A
+           ↑ frozen   ↑ trainable (rank r)
+```
+
+- **A** is `(r × in_dim)`, **B** is `(out_dim × r)` — very small
+- Only A and B are trained; the original W stays frozen
+- This preserves the backbone's pretrained knowledge while adapting to the new task
+- **Result**: only ~2.9M trainable params (1.4% of 196M), enabling fine-tuning on a single GPU with limited data, without catastrophic forgetting or overfitting
+
 ## Summary
 
 | Metric | Value |
