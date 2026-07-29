@@ -17,6 +17,7 @@ from config import Config
 from dataset import PMCVQADataset, collate_fn
 from model import (PMCVQAModel, get_fusion_head_params, get_lora_params,
                    count_trainable_params)
+from explain import explain_samples
 
 
 def compute_class_weights_from_csv(csv_path, num_samples=0):
@@ -288,6 +289,23 @@ def main():
                 break
 
     print(f"\nTraining complete. Best val acc: {best_val_acc:.4f}")
+
+    if config.use_wandb:
+        ckpt = torch.load(f"{config.checkpoint_dir}/best.pt", map_location=device)
+        model.load_state_dict(ckpt['model_state_dict'])
+        print(f"\nGenerating explanations for {config.num_explain_samples} samples...")
+        explain_samples(model, val_dataset_base, tokenizer, device, config,
+                        num_samples=config.num_explain_samples)
+        explain_dir = config.explain_dir
+        if os.path.isdir(explain_dir):
+            images = []
+            for fname in sorted(os.listdir(explain_dir)):
+                if fname.endswith('.png'):
+                    path = os.path.join(explain_dir, fname)
+                    images.append(wandb.Image(path, caption=fname))
+            if images:
+                wandb.log({"explanations": images})
+                print(f"  Logged {len(images)} explanation images to W&B")
 
     if config.push_to_hub and config.hf_repo_id:
         print(f"Pushing best model to Hugging Face Hub: {config.hf_repo_id}")
