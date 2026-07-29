@@ -266,7 +266,7 @@ def main():
     scaler = GradScaler('cuda', enabled=(config.use_amp and device.type == 'cuda'))
 
     best_val_acc = 0.0
-    best_macro_f1 = 0.0
+    best_metrics = {}
     epochs_no_improve = 0
     for epoch in range(1, config.num_epochs + 1):
         print(f"\nEpoch {epoch}/{config.num_epochs}")
@@ -336,7 +336,17 @@ def main():
 
         if val_acc > best_val_acc:
             best_val_acc = val_acc
-            best_macro_f1 = macro_f1
+            best_metrics = {
+                'best_val_acc': val_acc,
+                'best_macro_f1': macro_f1,
+                'best_top2_acc': top2_acc,
+                'best_auc_roc': auc_roc,
+                'best_f1_A': per_class_f1[0],
+                'best_f1_B': per_class_f1[1],
+                'best_f1_C': per_class_f1[2],
+                'best_f1_D': per_class_f1[3],
+                'best_val_loss': val_loss,
+            }
             epochs_no_improve = 0
             torch.save(ckpt, f"{config.checkpoint_dir}/best.pt")
             print(f"  saved best model (val_acc={val_acc:.4f})")
@@ -350,8 +360,8 @@ def main():
     print(f"\nTraining complete. Best val acc: {best_val_acc:.4f}")
 
     if config.use_wandb:
-        wandb.run.summary['best_val_acc'] = best_val_acc
-        wandb.run.summary['best_macro_f1'] = best_macro_f1
+        for k, v in best_metrics.items():
+            wandb.run.summary[k] = v
         ckpt = torch.load(f"{config.checkpoint_dir}/best.pt", map_location=device)
         model.load_state_dict(ckpt['model_state_dict'])
         print(f"\nGenerating explanations for {config.num_explain_samples} samples...")
@@ -384,7 +394,7 @@ def main():
 
     with open(f"{config.output_dir}/train_results.json", 'w') as f:
         json.dump({
-            'best_val_acc': best_val_acc,
+            **best_metrics,
             'config': {k: (str(v) if not isinstance(v, (int, float, bool, str))
                            else v)
                        for k, v in config.__dict__.items()},
