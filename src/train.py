@@ -120,9 +120,16 @@ def validate(model, loader, criterion, device):
     all_preds = torch.cat(all_preds)
     all_labels = torch.cat(all_labels)
 
+    confusion = torch.zeros(4, 4, dtype=torch.int64)
+    for t, p in zip(all_labels, all_preds):
+        confusion[t, p] += 1
+
     metrics = compute_all_metrics(all_labels.numpy(), all_preds.numpy(),
                                   pred_texts, ref_texts)
     metrics['loss'] = total_loss / total
+    metrics['confusion_matrix'] = confusion.numpy()
+    metrics['labels'] = all_labels.numpy()
+    metrics['preds'] = all_preds.numpy()
     return metrics
 
 
@@ -288,6 +295,10 @@ def main():
                 'val/bleu_2': val_bleu['bleu_2'],
                 'val/bleu_3': val_bleu['bleu_3'],
                 'val/bleu_4': val_bleu['bleu_4'],
+                'val/confusion_matrix': wandb.plot.confusion_matrix(
+                    y_true=val_metrics['labels'],
+                    preds=val_metrics['preds'],
+                    class_names=labels),
                 'lr': scheduler.get_last_lr()[0],
             })
 
