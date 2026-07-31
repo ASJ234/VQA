@@ -1,3 +1,62 @@
+# Changelog — 2026-07-31
+
+Changes from the metrics-overhaul session.
+
+---
+
+## 1. Metric set replaced with Accuracy, WUPS, BLEU, F1-Score
+
+Added `src/metrics.py` with a single `compute_all_metrics()` entry point. The model is now evaluated with exactly four metrics:
+
+| Metric | Description |
+|---|---|
+| **Accuracy** | Fraction of correct predictions (predicted index == ground-truth index) |
+| **WUPS** | Wu-Palmer (WordNet) semantic similarity between predicted and reference answer text; reported at thresholds 0.0 and 0.9 |
+| **BLEU** | n-gram precision + brevity penalty between predicted and reference answer text; reported as BLEU-1 … BLEU-4 |
+| **F1-Score** | Macro F1 (unweighted mean of per-class F1) plus per-class F1 (A/B/C/D) |
+
+Because the task is multiple-choice, WUPS and BLEU compare the **predicted choice text** against the **reference choice text** of the correct option.
+
+### Removed metrics
+
+| Removed | Reason |
+|---|---|
+| Per-class accuracy | Replaced by per-class F1 |
+| Per-class precision / recall | Folded into F1 |
+| Top-2 accuracy | Not part of the requested metric set |
+| AUC-ROC (OVR) | Not part of the requested metric set |
+| Confusion matrix | Not part of the requested metric set |
+
+### `src/metrics.py` (new)
+- `compute_accuracy`, `compute_f1`, `compute_bleu`, `compute_wups` (self-contained BLEU, WordNet-based WUPS via NLTK)
+- `compute_all_metrics(labels, preds, pred_texts, ref_texts)` → dict with all four metrics
+
+### `src/dataset.py`
+- `__getitem__` now also returns `choices` (the four cleaned choice texts) so eval/train can build predicted/reference answer strings for WUPS & BLEU.
+
+### `src/eval.py`
+- `evaluate()` now returns `{loss, accuracy, f1_macro, f1, wups_0.0, wups_0.9, bleu}`.
+- Removed confusion matrix, classification report, per-class accuracy printing.
+- Results saved to `outputs/test_results.json`.
+
+### `src/train.py`
+- `validate()` now returns the same four-metric dict.
+- Console output, W&B per-epoch logging (`val/acc`, `val/macro_f1`, `val/f1_A…D`, `val/wups_0.0`, `val/wups_0.9`, `val/bleu_1…4`) and `wandb.run.summary` best-metrics updated to the new set.
+- Best checkpoint selection still uses validation accuracy.
+
+### `requirements.txt`
+- Added `nltk` (WordNet data downloaded automatically on first WUPS use).
+
+---
+
+## Commits
+
+```
+31e3b83  use Accuracy, WUPS, BLEU, F1-Score metrics for VQA evaluation
+```
+
+---
+
 # Changelog — 2026-07-28
 
 All changes from the overfitting-fix session.

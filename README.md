@@ -127,6 +127,7 @@ VQA/
 │   ├── config.py        # Hyperparameters & paths
 │   ├── dataset.py       # PMCVQADataset, collate_fn
 │   ├── model.py         # BiomedCLIP + LoRA + fusion head
+│   ├── metrics.py       # Accuracy, WUPS, BLEU, F1-Score
 │   ├── train.py         # Training loop with AMP & validation
 │   ├── eval.py          # Test evaluation & metrics
 │   ├── explain.py       # XAI: attention heatmaps & gradient saliency
@@ -168,15 +169,17 @@ Output: `outputs/explanations/{Figure_path}.png`
 
 ## Results
 
-*(to be filled)*
+*(to be filled — pending a run with the current metrics)*
 
 | Metric | Value |
 |--------|-------|
-| Test Accuracy | — |
-| Class A Accuracy | — |
-| Class B Accuracy | — |
-| Class C Accuracy | — |
-| Class D Accuracy | — |
+| Accuracy | — |
+| WUPS@0.0 | — |
+| WUPS@0.9 | — |
+| BLEU-4 | — |
+| Macro F1 | — |
+
+All five are logged to W&B per epoch during training and saved to `outputs/test_results.json` after evaluation. WUPS and BLEU are computed by comparing the **predicted choice text** against the **reference choice text** (standard for multiple-choice VQA).
 
 ---
 

@@ -2,44 +2,26 @@
 
 ## Metrics and why they were chosen
 
+The model is evaluated with four metrics: **Accuracy, WUPS, BLEU, and F1-Score**. Because this is a multiple-choice VQA task (pick one of A/B/C/D), the text-based metrics (WUPS, BLEU) are computed by comparing the **predicted choice text** against the **reference choice text** of the correct answer.
+
 ### Accuracy
-Overall fraction of correct predictions. Simple and intuitive, but misleading when classes are imbalanced — a model guessing "C" every time would get ~38%.
+Overall fraction of correct predictions (`predicted index == ground-truth index`). Simple and intuitive, but misleading when classes are imbalanced — a model guessing "C" every time would get ~38%.
 
-### Per-class accuracy
-Accuracy broken down per class (A/B/C/D). Reveals which classes the model handles well or poorly — critical for spotting imbalance effects.
+### WUPS (Wu-Palmer Similarity)
+Semantic similarity between the predicted answer text and the reference answer text, computed via WordNet. It measures how "close" a wrong answer is to the right one:
 
-### Precision (per-class)
-Of all predictions for class X, how many were correct?
-```
-precision = tp / (tp + fp)
-```
-High precision = few false alarms. Important when a wrong answer is costly (e.g., confident but wrong diagnosis).
+- **WUPS@0.0** — plain mean Wu-Palmer similarity (0 = unrelated, 1 = identical)
+- **WUPS@0.9** — stricter: similarities below 0.9 are penalized by scaling with 0.9
 
-### Recall (per-class)
-Of all true class X samples, how many did the model catch?
-```
-recall = tp / (tp + fn)
-```
-High recall = few misses. Important when missing the correct answer is costly.
+A partial-credit metric — the model gets some credit for answers that are semantically similar (e.g. "Red" vs "Reddish") even when not exact.
 
-### F1 (per-class)
-Harmonic mean of precision and recall:
-```
-F1 = 2 · P · R / (P + R)
-```
-A single number balancing both — better than accuracy when classes are imbalanced.
+### BLEU
+n-gram precision between the predicted answer text and the reference answer text with a brevity penalty. Reported as BLEU-1 through BLEU-4. Measures exact word/sequence overlap rather than semantics.
 
-### Macro F1
-Unweighted average of per-class F1 scores. Treats all classes equally regardless of size — the **single best metric** for imbalanced datasets. If the model ignores minority classes (A, D), macro F1 drops sharply.
+### F1-Score
+Harmonic mean of precision and recall. Reported as **macro F1** (unweighted mean of per-class F1), the single best metric for imbalanced datasets — if the model ignores minority classes (A, D), macro F1 drops sharply. Per-class F1 (A/B/C/D) is also reported.
 
-### Top-2 accuracy
-Is the correct answer among the model's top 2 choices? At 67% vs 42% accuracy, it shows the model is usually "warm" — it narrows it down to two options even when it can't pick the right one. Useful for applications with human-in-the-loop verification.
-
-### AUC-ROC (One-vs-Rest)
-Measures how well the model separates each class from all others across all confidence thresholds. 0.5 = random, 1.0 = perfect. At 0.67, the model clearly ranks correct answers above incorrect ones on average, even when it doesn't always pick the right one.
-
-### Confusion matrix
-4×4 grid showing true vs predicted labels. Reveals specific confusion patterns — e.g., is the model consistently mixing up A↔D (both minority classes) or B↔C (both majority classes)?
+All four metrics are logged to W&B per epoch during training, written to the run summary at the end of training, and saved to `outputs/test_results.json` after evaluation.
 
 ## What is LoRA?
 
@@ -57,6 +39,8 @@ W_updated = W + B·A
 
 ## Summary
 
+*Pending — a fresh run is needed to populate the table with the new metric set. Values below are from the previous run under the old metric set.*
+
 | Metric | Value |
 |---|---|
 | Best val accuracy | 41.8% |
@@ -65,21 +49,14 @@ W_updated = W + B·A
 | AUC-ROC (OVR) | 0.670 |
 | Best epoch | 11 (early stopped at 15) |
 
-### Per-class metrics (at best epoch)
-
-| Class | Acc | Precision | Recall | F1 |
-|---|---|---|---|---|
-| A | 44.7% | 0.281 | 0.447 | 0.345 |
-| B | 44.0% | 0.471 | 0.440 | 0.455 |
-| C | 38.9% | 0.569 | 0.389 | 0.463 |
-| D | 41.2% | 0.298 | 0.412 | 0.346 |
+> Note: Top-2 accuracy and AUC-ROC were removed when the metric set was replaced. They are kept here only as a historical reference for the previous run.
 
 ## Analysis
 
 - **Val loss stabilized** after epoch 11 (didn't climb back up) — overfitting fix worked
-- **AUC-ROC 0.67** and **Top-2 67%** show the model learns meaningful representations, well above random (50% / 25%)
-- **Class imbalance** hurts minority classes (A ~14%, D ~13%): lower precision/F1 vs majority classes (B ~36%, C ~38%)
+- **Class imbalance** hurts minority classes (A ~14%, D ~13%): lower F1 vs majority classes (B ~36%, C ~38%)
 - **Accuracy plateaued at ~42%** — the model can't reliably pick the single correct answer out of 4
+- The new **WUPS and BLEU** metrics will reveal how semantically close the model's wrong answers are to the ground truth
 
 ## How to improve
 
