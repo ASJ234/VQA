@@ -36,11 +36,18 @@ class PMCVQADataset(Dataset):
             ])
 
         self.samples = []
+        missing = 0
         with open(csv_path, 'r') as f:
             reader = csv.DictReader(f)
             for row in reader:
                 if split is None or row.get('split', '').strip() == split:
-                    self.samples.append(row)
+                    if os.path.exists(os.path.join(self.image_dir, row['Figure_path'])):
+                        self.samples.append(row)
+                    else:
+                        missing += 1
+        if missing:
+            print(f"  Warning: skipped {missing} samples with missing images")
+        self.missing = missing
 
     def __len__(self):
         return len(self.samples)
