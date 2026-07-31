@@ -6,13 +6,12 @@ import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader
 from transformers import AutoTokenizer
-from sklearn.metrics import confusion_matrix, classification_report
-import numpy as np
 from tqdm import tqdm
 
 from config import Config
 from dataset import PMCVQADataset, collate_fn
 from model import PMCVQAModel
+from metrics import compute_all_metrics
 
 
 @torch.no_grad()
@@ -21,6 +20,8 @@ def evaluate(model, loader, criterion, device):
     total_loss = 0
     all_preds = []
     all_labels = []
+    pred_texts = []
+    ref_texts = []
 
     for batch in tqdm(loader, desc='Eval'):
         images = batch['image'].to(device)
@@ -35,24 +36,18 @@ def evaluate(model, loader, criterion, device):
 
         total_loss += loss.item() * images.size(0)
         preds = scores.argmax(dim=-1)
-        all_preds.extend(preds.cpu().numpy())
-        all_labels.extend(labels.cpu().numpy())
+        preds_np = preds.cpu().numpy()
+        labels_np = labels.cpu().numpy()
+        all_preds.extend(preds_np)
+        all_labels.extend(labels_np)
 
-    all_preds = np.array(all_preds)
-    all_labels = np.array(all_labels)
+        choices = batch['choices']
+        pred_texts.extend([choices[i][int(p)] for i, p in enumerate(preds_np)])
+        ref_texts.extend([choices[i][int(l)] for i, l in enumerate(labels_np)])
 
-    acc = (all_preds == all_labels).mean()
-    per_class_acc = {}
-    for c in range(4):
-        mask = all_labels == c
-        per_class_acc[chr(65 + c)] = float((all_preds[mask] == all_labels[mask]).mean()) if mask.sum() > 0 else 0.0
-
-    cm = confusion_matrix(all_labels, all_preds)
-    report = classification_report(all_labels, all_preds,
-                                   target_names=['A', 'B', 'C', 'D'],
-                                   output_dict=True)
-
-    return total_loss / len(loader.dataset), acc, per_class_acc, cm.tolist(), report
+    metrics = compute_all_metrics(all_labels, all_preds, pred_texts, ref_texts)
+    metrics['loss'] = total_loss / len(loader.dataset)
+    return metrics
 
 
 def main():
@@ -94,30 +89,21 @@ def main():
     model.eval()
 
     criterion = nn.CrossEntropyLoss()
-    loss, acc, per_class_acc, cm, report = evaluate(
-        model, test_loader, criterion, device)
+    metrics = evaluate(model, test_loader, criterion, device)
 
     print(f"\nTest Results:")
-    print(f"  Loss: {loss:.4f}  |  Accuracy: {acc:.4f} ({acc * 100:.2f}%)")
-    print(f"  Per-class accuracy: {per_class_acc}")
-    print(f"\nConfusion Matrix:")
-    for row in cm:
-        print(f"    {row}")
-    print(f"\nPer-class Metrics:")
-    for cls_name in ['A', 'B', 'C', 'D']:
-        if cls_name in report:
-            r = report[cls_name]
-            print(f"  {cls_name}: precision={r['precision']:.4f}, "
-                  f"recall={r['recall']:.4f}, f1={r['f1-score']:.4f}")
+    print(f"  Loss:    {metrics['loss']:.4f}")
+    print(f"  Accuracy: {metrics['accuracy']:.4f} ({metrics['accuracy'] * 100:.2f}%)")
+    print(f"  Macro F1: {metrics['f1_macro']:.4f}")
+    for k, v in metrics['f1'].items():
+        print(f"    F1 {k}: {v:.4f}")
+    print(f"  WUPS@0.0: {metrics['wups_0.0']:.4f}")
+    print(f"  WUPS@0.9: {metrics['wups_0.9']:.4f}")
+    for k, v in metrics['bleu'].items():
+        print(f"  {k.upper()}: {v:.4f}")
 
     os.makedirs(config.output_dir, exist_ok=True)
-    results = {
-        'loss': loss,
-        'accuracy': acc,
-        'per_class_accuracy': per_class_acc,
-        'confusion_matrix': cm,
-        'classification_report': report,
-    }
+    results = {k: v for k, v in metrics.items()}
     with open(f"{config.output_dir}/test_results.json", 'w') as f:
         json.dump(results, f, indent=2)
     print(f"\nResults saved to {config.output_dir}/test_results.json")

@@ -83,6 +83,7 @@ class PMCVQADataset(Dataset):
             'question_attention_mask': q_enc['attention_mask'].squeeze(0),
             'choices_input_ids': c_enc['input_ids'],
             'choices_attention_mask': c_enc['attention_mask'],
+            'choices': choices,
             'label': torch.tensor(label, dtype=torch.long),
             'figure_path': sample['Figure_path'],
         }
