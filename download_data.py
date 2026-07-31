@@ -24,6 +24,12 @@ images_zip = hf_hub_download(repo_id=REPO, filename="images_2.zip",
 
 print("Extracting images...")
 with zipfile.ZipFile(images_zip, 'r') as z:
-    z.extractall(DATA_DIR)
+    z.extractall(os.path.join(DATA_DIR, 'images_2'))
+
+stale_figures = os.path.join(DATA_DIR, 'figures')
+target_figures = os.path.join(DATA_DIR, 'images_2', 'figures')
+if os.path.isdir(stale_figures) and not os.path.isdir(target_figures):
+    print("Moving figures/ into images_2/figures ...")
+    os.rename(stale_figures, target_figures)
 
 print("Done!")

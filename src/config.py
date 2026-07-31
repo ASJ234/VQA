@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 
 @dataclass
@@ -57,3 +57,10 @@ class Config:
     # Hugging Face Hub
     push_to_hub: bool = True
     hf_repo_id: str = "ASJ234/pmc-vqa"
+
+    def __post_init__(self):
+        import os
+        if not os.path.isdir(self.image_dir):
+            alt = os.path.join(self.data_root, "figures")
+            if os.path.isdir(alt):
+                self.image_dir = alt
