@@ -201,6 +201,17 @@ def main():
 
     print(f"Train: {len(train_dataset)}, Val: {len(val_dataset)}")
 
+    test_dataset = PMCVQADataset(
+        csv_path=config.test_csv,
+        image_dir=config.image_dir,
+        tokenizer=tokenizer,
+        max_length=config.max_text_length,
+        image_size=config.image_size,
+        split='test',
+        train=False,
+    )
+    print(f"Test: {len(test_dataset)}")
+
     class_weights = compute_class_weights_from_csv(
         config.train_csv, num_samples=limit or 0)
     print(f"Class weights: {class_weights.tolist()}")
