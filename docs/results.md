@@ -7,6 +7,8 @@ The model is evaluated with four metrics: **Accuracy, WUPS, BLEU, and F1-Score**
 ### Accuracy
 Overall fraction of correct predictions (`predicted index == ground-truth index`). Simple and intuitive, but misleading when classes are imbalanced — a model guessing "C" every time would get ~38%.
 
+**Importance:** the headline number — "how often does the model pick the exact correct option (A/B/C/D)?" Read it together with F1, since imbalance can inflate it.
+
 ### WUPS (Wu-Palmer Similarity)
 Semantic similarity between the predicted answer text and the reference answer text, computed via WordNet. It measures how "close" a wrong answer is to the right one:
 
@@ -15,11 +17,26 @@ Semantic similarity between the predicted answer text and the reference answer t
 
 A partial-credit metric — the model gets some credit for answers that are semantically similar (e.g. "Red" vs "Reddish") even when not exact.
 
+**Importance:** reveals *how semantically close the wrong answers are to the truth*. High WUPS with moderate accuracy means errors are near-misses; low WUPS means the model is essentially guessing off-base answers.
+
 ### BLEU
 n-gram precision between the predicted answer text and the reference answer text with a brevity penalty. Reported as BLEU-1 through BLEU-4. Measures exact word/sequence overlap rather than semantics.
 
+**Importance:** complements WUPS — WUPS measures *meaning*, BLEU measures *surface text match*. Together they show whether the model's generated answer text is of meaningful quality, not just that the chosen letter happens to be right.
+
 ### F1-Score
 Harmonic mean of precision and recall. Reported as **macro F1** (unweighted mean of per-class F1), the single best metric for imbalanced datasets — if the model ignores minority classes (A, D), macro F1 drops sharply. Per-class F1 (A/B/C/D) is also reported.
+
+**Importance:** the honesty check on accuracy — "is performance balanced across all four options?" A macro F1 noticeably below accuracy signals the model is neglecting minority classes.
+
+### Summary of metric roles
+
+| Metric | Answers | Role |
+|---|---|---|
+| Accuracy | "How often is the exact option right?" | Choice selection |
+| F1-Score | "Are all classes handled fairly?" | Choice selection |
+| WUPS | "How semantically close are wrong answers?" | Answer text quality |
+| BLEU | "How much text overlap with the reference?" | Answer text quality |
 
 All four metrics are logged to W&B per epoch during training, written to the run summary at the end of training, and saved to `outputs/test_results.json` after evaluation.
 
