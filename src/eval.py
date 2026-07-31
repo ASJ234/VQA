@@ -7,6 +7,7 @@ import torch.nn as nn
 from torch.utils.data import DataLoader
 from transformers import AutoTokenizer
 from tqdm import tqdm
+import wandb
 
 from config import Config
 from dataset import PMCVQADataset, collate_fn
@@ -107,6 +108,23 @@ def main():
     with open(f"{config.output_dir}/test_results.json", 'w') as f:
         json.dump(results, f, indent=2)
     print(f"\nResults saved to {config.output_dir}/test_results.json")
+
+    if wandb.run is not None:
+        test_log = {
+            'test/loss': metrics['loss'],
+            'test/accuracy': metrics['accuracy'],
+            'test/f1_macro': metrics['f1_macro'],
+            'test/wups_0.0': metrics['wups_0.0'],
+            'test/wups_0.9': metrics['wups_0.9'],
+            'test/bleu_1': metrics['bleu']['bleu_1'],
+            'test/bleu_2': metrics['bleu']['bleu_2'],
+            'test/bleu_3': metrics['bleu']['bleu_3'],
+            'test/bleu_4': metrics['bleu']['bleu_4'],
+        }
+        wandb.log(test_log)
+        for k, v in test_log.items():
+            wandb.run.summary[k] = v
+        print("  Test metrics logged to W&B")
 
     if args.explain:
         from explain import explain_samples

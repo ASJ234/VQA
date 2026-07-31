@@ -392,9 +392,6 @@ def main():
         print(f"  Pushed adapter_model.pt ({os.path.getsize('/tmp/adapter_model.pt')/1e6:.1f}MB) "
               f"to https://huggingface.co/{config.hf_repo_id}")
 
-    if config.use_wandb:
-        wandb.finish()
-
     with open(f"{config.output_dir}/train_results.json", 'w') as f:
         json.dump({
             **best_metrics,
@@ -406,6 +403,9 @@ def main():
     print("\nTraining complete. Running test-set evaluation...")
     from eval import main as eval_main
     eval_main()
+
+    if config.use_wandb:
+        wandb.finish()
 
 
 if __name__ == '__main__':
