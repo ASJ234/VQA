@@ -111,7 +111,7 @@ All hyperparameters are set in [`src/config.py`](src/config.py):
 | Parameter | Default | Description |
 |-----------|---------|-------------|
 | `batch_size` | 32 | Per GPU batch size |
-| `num_epochs` | 15 | Training epochs |
+| `num_epochs` | 30 | Training epochs |
 | `lr` | 5e-5 | LoRA parameter learning rate |
 | `head_lr` | 1e-3 | Fusion head learning rate |
 | `use_lora` | True | Enable LoRA fine-tuning |

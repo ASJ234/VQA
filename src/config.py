@@ -25,14 +25,14 @@ class Config:
 
     # Training
     batch_size: int = 16
-    num_epochs: int = 15
+    num_epochs: int = 30
     lr: float = 5e-5
     head_lr: float = 5e-4
     weight_decay: float = 0.1
     warmup_ratio: float = 0.1
     max_grad_norm: float = 1.0
     label_smoothing: float = 0.1
-    early_stopping_patience: int = 4
+    early_stopping_patience: int = 10
 
     # Data
     image_size: int = 224
