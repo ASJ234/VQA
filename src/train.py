@@ -403,6 +403,10 @@ def main():
                        for k, v in config.__dict__.items()},
         }, f, indent=2)
 
+    print("\nTraining complete. Running test-set evaluation...")
+    from eval import main as eval_main
+    eval_main()
+
 
 if __name__ == '__main__':
     main()
