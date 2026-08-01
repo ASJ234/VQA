@@ -1,5 +1,6 @@
 import os
 import torch
+import torch.nn.functional as F
 import numpy as np
 import matplotlib
 matplotlib.use('Agg')
@@ -10,20 +11,41 @@ from PIL import Image
 def _get_vit_attention(model, image_tensor, device):
     attentions = []
 
-    def hook_fn(module, args, output):
-        if isinstance(output, tuple) and len(output) > 1:
-            attentions.append(output[1].detach())
+    def make_hook(module):
+        def hook_fn(module, args, output):
+            x = args[0]
+            N, L, C = x.shape
+            if not hasattr(module, 'in_proj_weight'):
+                return
+            q, k, v = F.linear(x, module.in_proj_weight, module.in_proj_bias).chunk(3, dim=-1)
+            q = q.reshape(N, L, module.num_heads, -1).transpose(1, 2)
+            k = k.reshape(N, L, module.num_heads, -1).transpose(1, 2)
+            if hasattr(module, 'logit_scale') and module.logit_scale is not None:
+                logit_scale = torch.clamp(module.logit_scale, max=module.logit_scale_max).exp()
+                attn = torch.bmm(
+                    F.normalize(q, dim=-1),
+                    F.normalize(k, dim=-1).transpose(-1, -2)) * logit_scale
+            else:
+                if hasattr(module, 'ln_q'):
+                    q = module.ln_q(q)
+                    k = module.ln_k(k)
+                attn = torch.bmm(q, k.transpose(-1, -2)) * (q.size(-1) ** -0.5)
+            attn = attn.softmax(dim=-1)
+            attentions.append(attn.detach())
+        return hook_fn
 
     hooks = []
-    if hasattr(model.backbone.vision_encoder, 'transformer'):
-        for block in model.backbone.vision_encoder.transformer.resblocks:
-            if hasattr(block, 'attn'):
-                hook = block.attn.register_forward_hook(hook_fn)
+    visual = model.backbone.visual
+    if hasattr(visual, 'transformer') and hasattr(visual.transformer, 'resblocks'):
+        for block in visual.transformer.resblocks:
+            attn_mod = getattr(block, 'attention', None) or getattr(block, 'attn', None)
+            if attn_mod is not None:
+                hook = attn_mod.register_forward_hook(make_hook(attn_mod))
                 hooks.append(hook)
 
     model.eval()
     with torch.no_grad():
-        _ = model.backbone.vision_encoder(image_tensor.unsqueeze(0).to(device))
+        _ = model.backbone.encode_image(image_tensor.unsqueeze(0).to(device))
 
     for h in hooks:
         h.remove()
@@ -99,7 +121,11 @@ def explain_samples(model, dataset, tokenizer, device, config, num_samples=10):
         pred_label = scores.argmax(dim=-1).item()
         pred_label_char = chr(65 + pred_label)
 
-        heatmap = _get_vit_attention(model, sample['image'], device)
+        try:
+            heatmap = _get_vit_attention(model, sample['image'], device)
+        except Exception as e:
+            print(f"  Warning: attention extraction failed ({e}); skipping heatmap")
+            heatmap = None
         saliency = _get_gradient_saliency(
             model,
             sample['image'].unsqueeze(0).to(device),
