@@ -56,24 +56,38 @@ W_updated = W + B·A
 
 ## Summary
 
-*Pending — a fresh run is needed to populate the table with the new metric set. Values below are from the previous run under the old metric set.*
+Run logged at **epoch 10** (best checkpoint).
 
 | Metric | Value |
 |---|---|
-| Best val accuracy | 41.8% |
-| Macro F1 | 0.402 |
-| Top-2 accuracy | 67.2% |
-| AUC-ROC (OVR) | 0.670 |
-| Best epoch | 11 (early stopped at 15) |
+| Best val accuracy | 41.2% |
+| Val macro F1 | 0.378 |
+| Best macro F1 | 0.403 |
+| Per-class F1 (best) | A: 0.347 · B: 0.446 · C: 0.449 · D: 0.372 |
+| WUPS@0.0 (best) | 0.832 |
+| WUPS@0.9 (best) | 0.804 |
+| BLEU-4 (best) | 0.583 |
+| Best val loss | 1.426 |
+| Best epoch | 10 |
 
-> Note: Top-2 accuracy and AUC-ROC were removed when the metric set was replaced. They are kept here only as a historical reference for the previous run.
+**Test set:**
+
+| Metric | Value |
+|---|---|
+| Accuracy | 37.2% |
+| Macro F1 | 0.357 |
+| WUPS@0.0 | 0.811 |
+| WUPS@0.9 | 0.781 |
+| BLEU-1 / -2 / -3 / -4 | 0.627 / 0.586 / 0.566 / 0.556 |
+
+> Note: Top-2 accuracy and AUC-ROC were removed when the metric set was replaced. The previous run reported Top-2 accuracy of 67.2% and AUC-ROC (OVR) of 0.670; kept here only as a historical reference.
 
 ## Analysis
 
-- **Val loss stabilized** after epoch 11 (didn't climb back up) — overfitting fix worked
+- **Val loss stabilized** around epoch 10 (best val loss 1.426) — overfitting fix worked
 - **Class imbalance** hurts minority classes (A ~14%, D ~13%): lower F1 vs majority classes (B ~36%, C ~38%)
-- **Accuracy plateaued at ~42%** — the model can't reliably pick the single correct answer out of 4
-- The new **WUPS and BLEU** metrics will reveal how semantically close the model's wrong answers are to the ground truth
+- **Accuracy plateaued at ~41%** — the model can't reliably pick the single correct answer out of 4
+- **WUPS and BLEU** show the model's wrong answers are still semantically close to the ground truth (WUPS@0.9 ≈ 0.80, BLEU-4 ≈ 0.58), i.e. errors are near-misses rather than off-base guesses
 
 ## How to improve
 
